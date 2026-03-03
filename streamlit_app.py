@@ -17,23 +17,37 @@ LOGO_FILE = APP_DIR / "energytag.png"
 TIME_RE = re.compile(r"^\d{4}-(S1|S2)$")
 YEAR_RE = re.compile(r"^\d{4}$")
 
+
 # -----------------------------
 # Auth
 # -----------------------------
 def get_credentials():
-    # Streamlit Cloud / local secrets:
-    # [auth]
-    # user = "admin"
-    # pass = "energytagorg"
+    """
+    Preferred: Streamlit Secrets
+      [auth]
+      user = "admin"
+      pass = "energytagorg"
+
+    Fallback (temporary): allows the app to work before secrets are configured.
+    Change or remove fallback after deployment.
+    """
+    default_user = "admin"
+    default_pass = "energytagorg"
+
     try:
         auth = st.secrets.get("auth", {})
-        return auth.get("user", ""), auth.get("pass", "")
+        user = auth.get("user")
+        pwd = auth.get("pass")
+        if user and pwd:
+            return user, pwd, True  # secrets present
     except Exception:
-        return "", ""
+        pass
+
+    return default_user, default_pass, False  # fallback
 
 
 def login_screen():
-    # Centered chic login card (like your inspiration, no phone frame)
+    # Centered chic login card
     st.markdown(
         """
         <style>
@@ -45,7 +59,6 @@ def login_screen():
           html, body, .stApp {height: 100%;}
           .block-container {padding-top: 0 !important; padding-bottom: 0 !important;}
 
-          /* Center the card */
           section.main > div {
             height: 100vh;
             display: flex;
@@ -74,6 +87,8 @@ def login_screen():
         unsafe_allow_html=True,
     )
 
+    user, pwd, secrets_ok = get_credentials()
+
     st.markdown('<div class="et-card">', unsafe_allow_html=True)
 
     st.markdown('<div class="et-logo">', unsafe_allow_html=True)
@@ -84,16 +99,16 @@ def login_screen():
     st.markdown('<div class="et-title">Welcome back</div>', unsafe_allow_html=True)
     st.markdown('<div class="et-sub">Sign in to your account</div>', unsafe_allow_html=True)
 
+    if not secrets_ok:
+        st.info("Secrets not configured yet — using temporary fallback login (admin / energytagorg).")
+
     with st.form("login_form", clear_on_submit=False):
         u = st.text_input("Username")
         p = st.text_input("Password", type="password")
         submitted = st.form_submit_button("Sign in")
 
     if submitted:
-        valid_user, valid_pass = get_credentials()
-        if not valid_user or not valid_pass:
-            st.error("No secrets found. Add [auth] user/pass in Streamlit Secrets.")
-        elif u == valid_user and p == valid_pass:
+        if u == user and p == pwd:
             st.session_state["authed"] = True
             st.rerun()
         else:
@@ -108,6 +123,7 @@ if "authed" not in st.session_state:
 if not st.session_state["authed"]:
     login_screen()
     st.stop()
+
 
 # -----------------------------
 # Data helpers
@@ -168,7 +184,6 @@ def tidy_from_wide(df: pd.DataFrame) -> pd.DataFrame:
     if not time_cols:
         return df.copy()
 
-    # map time -> adjacent flag col
     time_to_flag = {}
     for i, c in enumerate(cols):
         if is_time_col(c) and i + 1 < len(cols) and str(cols[i + 1]).lower().startswith("flag"):
@@ -211,9 +226,6 @@ def tidy_from_wide(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-# -----------------------------
-# Friendly names
-# -----------------------------
 FRIENDLY_COLS = {
     "time_period": "Time period",
     "value": "Value",
@@ -244,7 +256,7 @@ def apply_friendly_headers(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # -----------------------------
-# Full sheet titles (your 13 datasets, in order)
+# Full sheet titles (in order)
 # -----------------------------
 FULL_SHEET_TITLES = [
     "Gas prices for household consumers - bi-annual data",
@@ -264,15 +276,13 @@ FULL_SHEET_TITLES = [
 
 
 def build_sheet_title_maps(actual_sheets, full_titles):
-    # Excel tab name limit = 31 chars
     actual_set = set(actual_sheets)
     title_to_sheet = {}
     for t in full_titles:
-        key = t[:31]
+        key = t[:31]  # Excel tab limit
         if key in actual_set:
             title_to_sheet[t] = key
         else:
-            # fallback: find close match
             cand = [s for s in actual_sheets if s.startswith(key[:18])]
             if cand:
                 title_to_sheet[t] = cand[0]
@@ -283,7 +293,7 @@ def build_sheet_title_maps(actual_sheets, full_titles):
 # Load workbook
 # -----------------------------
 if not DATA_FILE.exists():
-    st.error(f"Missing data file: {DATA_FILE.name}. Put it next to streamlit_app.py.")
+    st.error(f"Missing data file: {DATA_FILE.name}. Make sure it’s in the repo.")
     st.stop()
 
 sheets = list_sheets(str(DATA_FILE))
@@ -351,7 +361,7 @@ with h2:
 st.markdown(f"# {display_title}")
 
 # -----------------------------
-# Load + tidy data
+# Load + tidy
 # -----------------------------
 raw = load_sheet(str(DATA_FILE), sheet)
 tidy = tidy_from_wide(raw)
@@ -368,40 +378,34 @@ reserved = {"time_period", "value", "flag"}
 dim_cols = [c for c in tidy.columns if c not in reserved and not c.endswith("_label")]
 
 # -----------------------------
-# Filters (collapsible)
-# Default: no selections -> show ALL data
-# Apply only after button click (or auto-apply)
+# Filters (default = ALL data)
 # -----------------------------
-# Initialize session state keys for filters once
 def ss_init(key, default):
     if key not in st.session_state:
         st.session_state[key] = default
 
-ss_init("apply_clicked", False)
-ss_init("auto_apply", False)
+ss_init("sel_time", [])
+ss_init("sel_geo", [])
 
 with st.expander("Filters", expanded=True):
-    top1, top2, top3 = st.columns([1.2, 1.2, 2.6])
-    with top1:
+    b1, b2, b3 = st.columns([1.2, 1.0, 2.8])
+    with b1:
         apply_clicked = st.button("Apply filters", type="primary")
-    with top2:
+    with b2:
         clear_clicked = st.button("Clear")
-    with top3:
-        auto_apply = st.toggle("Auto-apply", value=False, help="If off, filters apply only after clicking Apply filters")
+    with b3:
+        auto_apply = st.toggle("Auto-apply", value=False)
 
-    # Clear resets selections
     if clear_clicked:
-        # remove stored selection keys
         for k in list(st.session_state.keys()):
             if k.startswith("sel_"):
                 del st.session_state[k]
         st.rerun()
 
-    # Build selectors (empty default = All)
-    f1, f2 = st.columns([2, 3], gap="large")
-    with f1:
+    c1, c2 = st.columns([2, 3], gap="large")
+    with c1:
         time_sel = st.multiselect("Time period", times, default=st.session_state.get("sel_time", []), key="sel_time")
-    with f2:
+    with c2:
         geo_sel = []
         if "geo" in tidy.columns:
             geos = sorted(tidy["geo"].dropna().astype(str).unique().tolist())
@@ -432,12 +436,10 @@ with st.expander("Filters", expanded=True):
                     chosen = st.multiselect(ui_label, vals, default=st.session_state.get(f"sel_{colname}", []), key=f"sel_{colname}")
                     other_filters[colname] = chosen if chosen else []
 
-# Decide whether to apply filters
 apply_now = auto_apply or apply_clicked
 
 filt = tidy.copy()
 if apply_now:
-    # Only filter dimensions that have selections
     if time_sel:
         filt = filt[filt["time_period"].astype(str).isin([str(x) for x in time_sel])]
     if "geo" in filt.columns and geo_sel:
@@ -469,11 +471,7 @@ display_df = apply_friendly_headers(filt)
 # -----------------------------
 if view_mode == "Table":
     st.markdown("### Results")
-    st.dataframe(
-        display_df.sort_values(["Time period"] + (["Country / region"] if "Country / region" in display_df.columns else [])),
-        use_container_width=True,
-        height=620,
-    )
+    st.dataframe(display_df, use_container_width=True, height=620)
 else:
     st.markdown("### Charts")
     if filt.empty:
