@@ -8,40 +8,20 @@ import altair as alt
 # -----------------------------
 # Page config
 # -----------------------------
-st.set_page_config(
-    page_title="EnergyTag — Eurostat Prices Explorer",
-    layout="wide",
-)
-
-
-
-st.markdown(
-    """
-    <style>
-      /* Wider sidebar so long sheet names fit */
-      
-      
-
-      /* Slightly smaller selectbox text so more characters fit */
-      
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+st.set_page_config(page_title="EnergyTag — Eurostat Prices Explorer", layout="wide")
 
 APP_DIR = Path(__file__).parent
 DATA_FILE = APP_DIR / "Eurostat- Natural gas & electricity prices (2007 onwards).xlsx"
-LOGO_FILE = APP_DIR / "energytag.png"  # put energytag.png next to this file
+LOGO_FILE = APP_DIR / "energytag.png"
 
-TIME_RE = re.compile(r"^\d{4}-(S1|S2)$")  # 2007-S1 etc
-YEAR_RE = re.compile(r"^\d{4}$")         # 2023 etc
-
+TIME_RE = re.compile(r"^\d{4}-(S1|S2)$")
+YEAR_RE = re.compile(r"^\d{4}$")
 
 # -----------------------------
 # Auth
 # -----------------------------
 def get_credentials():
-    # Requires .streamlit/secrets.toml
+    # Streamlit Cloud / local secrets:
     # [auth]
     # user = "admin"
     # pass = "energytagorg"
@@ -52,41 +32,40 @@ def get_credentials():
         return "", ""
 
 
-
-
 def login_screen():
-    # Force no-scroll, true-center login card
+    # Centered chic login card (like your inspiration, no phone frame)
     st.markdown(
         """
         <style>
-          /* Hide Streamlit chrome on login */
           header[data-testid="stHeader"] {display:none !important;}
-          #MainMenu {visibility: hidden;}
-          footer {visibility: hidden;}
           section[data-testid="stSidebar"] {display:none !important;}
+          #MainMenu {visibility:hidden;}
+          footer {visibility:hidden;}
 
-          /* Remove ALL padding/margins that can create blank space */
-          html, body {height: 100%; overflow: hidden;}
-          .stApp {height: 100vh; overflow: hidden;}
-          .block-container {padding: 0 !important; margin: 0 !important; max-width: 100% !important;}
+          html, body, .stApp {height: 100%;}
+          .block-container {padding-top: 0 !important; padding-bottom: 0 !important;}
 
-          /* Make the MAIN content area full height + centered */
-          section.main > div {height: 100vh; display:flex; align-items:center; justify-content:center;}
+          /* Center the card */
+          section.main > div {
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
 
-          /* Card */
           .et-card{
             width: 420px;
-            max-width: calc(100vw - 48px);
-            background: rgba(255,255,255,0.045);
-            border: 1px solid rgba(255,255,255,0.10);
+            max-width: calc(100vw - 44px);
+            background: rgba(255,255,255,0.055);
+            border: 1px solid rgba(255,255,255,0.12);
             border-radius: 18px;
             padding: 28px 26px 22px 26px;
-            box-shadow: 0 22px 60px rgba(0,0,0,0.45);
-            backdrop-filter: blur(10px);
+            box-shadow: 0 22px 70px rgba(0,0,0,0.55);
+            backdrop-filter: blur(12px);
           }
-          .et-logo{display:flex; justify-content:center; margin-bottom: 14px;}
-          .et-title{text-align:center; font-size: 22px; font-weight: 700; margin: 6px 0 2px 0;}
-          .et-subtitle{text-align:center; font-size: 13px; opacity: 0.8; margin: 0 0 14px 0;}
+          .et-logo {display:flex; justify-content:center; margin-bottom: 14px;}
+          .et-title {text-align:center; font-size: 22px; font-weight: 750; margin: 6px 0 2px 0;}
+          .et-sub {text-align:center; font-size: 13px; opacity: 0.8; margin: 0 0 14px 0;}
 
           .stTextInput > div > div input {border-radius: 12px;}
           .stButton button {border-radius: 12px; width: 100%;}
@@ -95,16 +74,15 @@ def login_screen():
         unsafe_allow_html=True,
     )
 
-    # One centered container; no extra markdown above it.
     st.markdown('<div class="et-card">', unsafe_allow_html=True)
 
     st.markdown('<div class="et-logo">', unsafe_allow_html=True)
     if LOGO_FILE.exists():
         st.image(str(LOGO_FILE), width=260)
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown('<div class="et-title">Welcome back</div>', unsafe_allow_html=True)
-    st.markdown('<div class="et-subtitle">Sign in to your account</div>', unsafe_allow_html=True)
+    st.markdown('<div class="et-sub">Sign in to your account</div>', unsafe_allow_html=True)
 
     with st.form("login_form", clear_on_submit=False):
         u = st.text_input("Username")
@@ -114,7 +92,7 @@ def login_screen():
     if submitted:
         valid_user, valid_pass = get_credentials()
         if not valid_user or not valid_pass:
-            st.error("No secrets found. Create .streamlit/secrets.toml with [auth].")
+            st.error("No secrets found. Add [auth] user/pass in Streamlit Secrets.")
         elif u == valid_user and p == valid_pass:
             st.session_state["authed"] = True
             st.rerun()
@@ -131,14 +109,12 @@ if not st.session_state["authed"]:
     login_screen()
     st.stop()
 
-
 # -----------------------------
-# Helpers
+# Data helpers
 # -----------------------------
 @st.cache_data(show_spinner=False)
 def list_sheets(xlsx_path: str):
-    xls = pd.ExcelFile(xlsx_path)
-    return xls.sheet_names
+    return pd.ExcelFile(xlsx_path).sheet_names
 
 
 @st.cache_data(show_spinner=False)
@@ -187,29 +163,18 @@ def time_sort_key(t: str):
 
 
 def tidy_from_wide(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Wide Eurostat-like sheet -> tidy:
-      dims... + time_period + value + flag
-
-    Handles:
-    - ':' missing
-    - separate flag columns named like flag / flag.1 / ...
-      assumed to correspond to the immediately preceding time column
-    - inline flags like '0.1398 e' or '0.1398 (d)'
-    """
     cols = list(df.columns)
     time_cols = [c for c in cols if is_time_col(c)]
     if not time_cols:
         return df.copy()
 
+    # map time -> adjacent flag col
     time_to_flag = {}
     for i, c in enumerate(cols):
-        if is_time_col(c):
-            if i + 1 < len(cols) and str(cols[i + 1]).lower().startswith("flag"):
-                time_to_flag[c] = cols[i + 1]
+        if is_time_col(c) and i + 1 < len(cols) and str(cols[i + 1]).lower().startswith("flag"):
+            time_to_flag[c] = cols[i + 1]
 
     dim_cols = [c for c in cols if (c not in time_cols) and (not str(c).lower().startswith("flag"))]
-
     long = df.melt(id_vars=dim_cols, value_vars=time_cols, var_name="time_period", value_name="value_raw")
 
     if time_to_flag:
@@ -242,13 +207,12 @@ def tidy_from_wide(df: pd.DataFrame) -> pd.DataFrame:
     long.loc[(long["flag"].isna()) | (long["flag"].astype(str).str.strip() == ""), "flag"] = long["flag_inline"]
 
     long["value"] = pd.to_numeric(long["value_num_str"], errors="coerce")
-
     out = long.drop(columns=["value_raw", "flag_raw", "value_num_str", "flag_inline"])
     return out
 
 
 # -----------------------------
-# Friendly column names (display)
+# Friendly names
 # -----------------------------
 FRIENDLY_COLS = {
     "time_period": "Time period",
@@ -264,9 +228,7 @@ FRIENDLY_COLS = {
     "freq": "Frequency",
     "customer": "Customer type",
 }
-
-# Also, if codebook exists and show_labels=True, we add these label columns:
-LABEL_FRIENDLY_SUFFIX = " (label)"
+LABEL_SUFFIX = " (label)"
 
 
 def apply_friendly_headers(df: pd.DataFrame) -> pd.DataFrame:
@@ -275,16 +237,50 @@ def apply_friendly_headers(df: pd.DataFrame) -> pd.DataFrame:
     for c in out.columns:
         if c.endswith("_label"):
             base = c.replace("_label", "")
-            base_name = FRIENDLY_COLS.get(base, base)
-            new_cols[c] = f"{base_name}{LABEL_FRIENDLY_SUFFIX}"
+            new_cols[c] = f"{FRIENDLY_COLS.get(base, base)}{LABEL_SUFFIX}"
         else:
             new_cols[c] = FRIENDLY_COLS.get(c, c)
-    out = out.rename(columns=new_cols)
-    return out
+    return out.rename(columns=new_cols)
 
 
 # -----------------------------
-# Load data
+# Full sheet titles (your 13 datasets, in order)
+# -----------------------------
+FULL_SHEET_TITLES = [
+    "Gas prices for household consumers - bi-annual data",
+    "Gas prices for non-household consumers - bi-annual data",
+    "Electricity prices for household consumers - bi-annual data",
+    "Electricity prices for non-household consumers - bi-annual data",
+    "Household consumption volumes of gas by consumption bands",
+    "Non-household consumption volumes of gas by consumption bands",
+    "Household consumption volumes of electricity by consumption bands",
+    "Non-household consumption volumes of electricity by consumption bands",
+    "Gas prices components for household consumers - annual data",
+    "Gas prices components for non-household consumers - annual data",
+    "Electricity prices components for non-household consumers - annual data",
+    "Electricity prices components for household consumers - annual data",
+    "Share for transmission and distribution in the network cost for gas and electricity - annual data",
+]
+
+
+def build_sheet_title_maps(actual_sheets, full_titles):
+    # Excel tab name limit = 31 chars
+    actual_set = set(actual_sheets)
+    title_to_sheet = {}
+    for t in full_titles:
+        key = t[:31]
+        if key in actual_set:
+            title_to_sheet[t] = key
+        else:
+            # fallback: find close match
+            cand = [s for s in actual_sheets if s.startswith(key[:18])]
+            if cand:
+                title_to_sheet[t] = cand[0]
+    return title_to_sheet
+
+
+# -----------------------------
+# Load workbook
 # -----------------------------
 if not DATA_FILE.exists():
     st.error(f"Missing data file: {DATA_FILE.name}. Put it next to streamlit_app.py.")
@@ -292,60 +288,24 @@ if not DATA_FILE.exists():
 
 sheets = list_sheets(str(DATA_FILE))
 codebook_sheet, codebook = load_codebook_if_exists(str(DATA_FILE))
+data_sheets = [s for s in sheets if s != codebook_sheet]
 
 label_map, notes_map = ({}, {})
 if codebook is not None:
     label_map, notes_map = build_code_maps(codebook)
 
-data_sheets = [s for s in sheets if s != codebook_sheet]
+title_to_sheet = build_sheet_title_maps(data_sheets, FULL_SHEET_TITLES)
 
 # -----------------------------
-# Sheet display titles (full) and ordering
-# Excel sheet names are limited to 31 chars, so we map full titles -> actual sheet tabs.
-# -----------------------------
-FULL_SHEET_TITLES = ['Gas prices for household consumers - bi-annual data', 'Gas prices for non-household consumers - bi-annual data', 'Electricity prices for household consumers - bi-annual data', 'Electricity prices for non-household consumers - bi-annual data', 'Household consumption volumes of gas by consumption bands', 'Non-household consumption volumes of gas by consumption bands', 'Household consumption volumes of electricity by consumption bands', 'Non-household consumption volumes of electricity by consumption bands', 'Gas prices components for household consumers - annual data', 'Gas prices components for non-household consumers - annual data', 'Electricity prices components for non-household consumers - annual data', 'Electricity prices components for household consumers - annual data', 'Share for transmission and distribution in the network cost for gas and electricity - annual data']
-
-def build_sheet_title_maps(actual_sheets, full_titles):
-    # Map by Excel's 31-char limit: match each full title to an actual sheet whose name is the first 31 chars.
-    actual_set = set(actual_sheets)
-    title_to_sheet = {}
-    sheet_to_title = {}
-
-    for t in full_titles:
-        key = t[:31]
-        # Prefer exact match on truncated name
-        if key in actual_set:
-            title_to_sheet[t] = key
-            sheet_to_title[key] = t
-        else:
-            # Fallback: find any actual sheet that starts with the same prefix (rare)
-            cand = [s for s in actual_sheets if s.startswith(key[:20])]
-            if cand:
-                title_to_sheet[t] = cand[0]
-                sheet_to_title[cand[0]] = t
-
-    return title_to_sheet, sheet_to_title
-
-
-
-# -----------------------------
-# Sidebar: dataset + definitions + logout
+# Sidebar
 # -----------------------------
 st.sidebar.markdown("##")
 if LOGO_FILE.exists():
-    st.sidebar.image(str(LOGO_FILE), width=160)
+    st.sidebar.image(str(LOGO_FILE), width=180)
 
 st.sidebar.markdown("### Dataset")
-
-title_to_sheet, sheet_to_title = build_sheet_title_maps(data_sheets, FULL_SHEET_TITLES)
-
-display_title = st.sidebar.selectbox(
-    "Choose sheet",
-    FULL_SHEET_TITLES,
-    index=0
-)
+display_title = st.sidebar.selectbox("Choose sheet", FULL_SHEET_TITLES, index=0)
 sheet = title_to_sheet.get(display_title, data_sheets[0])
-
 
 st.sidebar.markdown("---")
 show_labels = st.sidebar.toggle("Show labels next to codes", value=True)
@@ -368,15 +328,13 @@ if st.sidebar.button("Logout"):
     st.session_state["authed"] = False
     st.rerun()
 
-
 # -----------------------------
-# Header bar: title LEFT, logo RIGHT (fixed)
+# Header
 # -----------------------------
-# Reduce top whitespace + tighter header
 st.markdown(
     """
     <style>
-      .block-container {padding-top: 1.2rem;}
+      .block-container {padding-top: 1.0rem;}
     </style>
     """,
     unsafe_allow_html=True,
@@ -385,161 +343,108 @@ st.markdown(
 h1, h2 = st.columns([6, 1], vertical_alignment="center")
 with h1:
     st.markdown("## Eurostat — Natural gas & electricity prices (2007 onwards)")
-    st.caption("Filter, chart, and export tables across sheets.")
+    st.caption("Filter, chart, and export tables across datasets.")
 with h2:
     if LOGO_FILE.exists():
-        st.image(str(LOGO_FILE), width=120)
+        st.image(str(LOGO_FILE), width=150)
 
-# Sheet title on page
-st.markdown(f"## {display_title}")
-
+st.markdown(f"# {display_title}")
 
 # -----------------------------
-# Prepare data (tidy + optional labels)
+# Load + tidy data
 # -----------------------------
 raw = load_sheet(str(DATA_FILE), sheet)
 tidy = tidy_from_wide(raw)
 
 if show_labels and codebook is not None:
-    # add *_label columns for any dimension present in codebook
     for c in list(tidy.columns):
         if c in ["time_period", "value", "flag"]:
             continue
         if c in label_map:
             tidy[f"{c}_label"] = tidy[c].map(label_map[c]).fillna("")
 
-
-# -----------------------------
-# Filters (TOP)
-# - dropdowns (multiselect) with default = all
-# -----------------------------
 times = sorted(tidy["time_period"].dropna().astype(str).unique().tolist(), key=time_sort_key)
-
-# Identify dimension columns (exclude value/time/flag + label columns)
 reserved = {"time_period", "value", "flag"}
 dim_cols = [c for c in tidy.columns if c not in reserved and not c.endswith("_label")]
 
-with st.container():
-    with st.expander("Filters", expanded=True):
+# -----------------------------
+# Filters (collapsible)
+# Default: no selections -> show ALL data
+# Apply only after button click (or auto-apply)
+# -----------------------------
+# Initialize session state keys for filters once
+def ss_init(key, default):
+    if key not in st.session_state:
+        st.session_state[key] = default
 
-        
+ss_init("apply_clicked", False)
+ss_init("auto_apply", False)
 
-            st.markdown("#### Filters")
-# Safe defaults (avoid NameError)
-auto_apply = False
-apply_clicked = False
+with st.expander("Filters", expanded=True):
+    top1, top2, top3 = st.columns([1.2, 1.2, 2.6])
+    with top1:
+        apply_clicked = st.button("Apply filters", type="primary")
+    with top2:
+        clear_clicked = st.button("Clear")
+    with top3:
+        auto_apply = st.toggle("Auto-apply", value=False, help="If off, filters apply only after clicking Apply filters")
 
+    # Clear resets selections
+    if clear_clicked:
+        # remove stored selection keys
+        for k in list(st.session_state.keys()):
+            if k.startswith("sel_"):
+                del st.session_state[k]
+        st.rerun()
 
-        
+    # Build selectors (empty default = All)
+    f1, f2 = st.columns([2, 3], gap="large")
+    with f1:
+        time_sel = st.multiselect("Time period", times, default=st.session_state.get("sel_time", []), key="sel_time")
+    with f2:
+        geo_sel = []
+        if "geo" in tidy.columns:
+            geos = sorted(tidy["geo"].dropna().astype(str).unique().tolist())
+            geo_sel = st.multiselect("Country / region (geo)", geos, default=st.session_state.get("sel_geo", []), key="sel_geo")
+            if not geo_sel:
+                st.caption("All countries")
 
-            # 1) Time + Geo in first row
+    other_cols = [c for c in dim_cols if c != "geo"]
+    other_filters = {}
+    if other_cols:
+        grid = st.columns(3, gap="large")
+        for i, colname in enumerate(other_cols):
+            vals = sorted(tidy[colname].dropna().astype(str).unique().tolist())
+            label_col = f"{colname}_label" if show_labels and f"{colname}_label" in tidy.columns else None
 
-            f1, f2, f3 = st.columns([2, 3, 2], gap="large")
+            with grid[i % 3]:
+                ui_label = FRIENDLY_COLS.get(colname, colname)
+                if label_col:
+                    display = []
+                    for v in vals:
+                        lab = tidy.loc[tidy[colname].astype(str) == v, label_col].dropna().astype(str).unique()
+                        lab = lab[0] if len(lab) else ""
+                        display.append(f"{v} — {lab}" if lab else v)
+                    display_to_code = dict(zip(display, vals))
+                    chosen_disp = st.multiselect(ui_label, display, default=st.session_state.get(f"sel_{colname}", []), key=f"sel_{colname}")
+                    other_filters[colname] = [display_to_code[x] for x in chosen_disp] if chosen_disp else []
+                else:
+                    chosen = st.multiselect(ui_label, vals, default=st.session_state.get(f"sel_{colname}", []), key=f"sel_{colname}")
+                    other_filters[colname] = chosen if chosen else []
 
-        
-
-            with f1:
-
-                time_sel = st.multiselect("Time period", times, default=[])
-
-        
-
-            with f2:
-
-                geo_sel = None
-
-                if "geo" in tidy.columns:
-
-                    geos = sorted(tidy["geo"].dropna().astype(str).unique().tolist())
-
-                    geo_sel = st.multiselect("Country / region (geo)", geos, default=[])
-
-        
-
-                    # Requirement: if all selected, show "All countries"
-
-                    if not geo_sel:
-                        st.caption("All countries")
-            with f3:
-
-                # Optional quick toggle: show/hide code columns (if you want later)
-
-                st.write("")
-
-        
-
-            # 2) Remaining filters as dropdown multiselects
-
-            other_cols = [c for c in dim_cols if c not in {"geo"}]
-
-            if other_cols:
-
-                grid = st.columns(3, gap="large")
-
-                other_filters = {}
-
-                for i, colname in enumerate(other_cols):
-
-                    vals = sorted(tidy[colname].dropna().astype(str).unique().tolist())
-
-                    label_col = f"{colname}_label" if show_labels and f"{colname}_label" in tidy.columns else None
-
-        
-
-                    with grid[i % 3]:
-
-                        if label_col:
-
-                            display = []
-
-                            for v in vals:
-
-                                lab = tidy.loc[tidy[colname].astype(str) == v, label_col].dropna().astype(str).unique()
-
-                                lab = lab[0] if len(lab) else ""
-
-                                display.append(f"{v} — {lab}" if lab else v)
-
-                            display_to_code = dict(zip(display, vals))
-
-                            chosen = st.multiselect(FRIENDLY_COLS.get(colname, colname), display, default=display)
-
-                            other_filters[colname] = [display_to_code[x] for x in chosen] if chosen else []
-
-                        else:
-
-                            chosen = st.multiselect(FRIENDLY_COLS.get(colname, colname), vals, default=vals)
-
-                            other_filters[colname] = chosen if chosen else []
-
-            else:
-
-                other_filters = {}
-
-        
-
-        
-
-        # Apply filters
-filt = tidy.copy()
-
-# Apply filters only if user chose something AND (auto_apply or Apply clicked)
+# Decide whether to apply filters
 apply_now = auto_apply or apply_clicked
 
+filt = tidy.copy()
 if apply_now:
-    # Time: only filter if user selected some
+    # Only filter dimensions that have selections
     if time_sel:
         filt = filt[filt["time_period"].astype(str).isin([str(x) for x in time_sel])]
-
-    # Geo: only filter if user selected some
-    if geo_sel is not None and geo_sel:
+    if "geo" in filt.columns and geo_sel:
         filt = filt[filt["geo"].astype(str).isin([str(x) for x in geo_sel])]
-
-    # Other dimensions: only filter if user selected some
     for colname, chosen in other_filters.items():
         if chosen:
             filt = filt[filt[colname].astype(str).isin([str(x) for x in chosen])]
-
 
 # -----------------------------
 # Summary + Download
@@ -551,41 +456,35 @@ m3.metric("Time periods", f"{filt['time_period'].nunique():,}")
 m4.metric("Flags", f"{(filt['flag'].notna() & (filt['flag'].astype(str).str.strip()!='')).sum():,}" if "flag" in filt.columns else "—")
 
 st.download_button(
-    "Download filtered CSV",
+    "Download CSV (current view)",
     data=filt.to_csv(index=False).encode("utf-8"),
-    file_name=f"{sheet}_filtered.csv",
+    file_name=f"{display_title}.csv",
     mime="text/csv",
 )
 
-
-# -----------------------------
-# Display: Table or Charts
-# -----------------------------
-# Prepare a friendlier view dataframe (rename columns)
 display_df = apply_friendly_headers(filt)
 
+# -----------------------------
+# Table / Charts
+# -----------------------------
 if view_mode == "Table":
-    st.markdown("#### Results")
+    st.markdown("### Results")
     st.dataframe(
         display_df.sort_values(["Time period"] + (["Country / region"] if "Country / region" in display_df.columns else [])),
         use_container_width=True,
-        height=600,
+        height=620,
     )
-
 else:
-    st.markdown("#### Charts")
-
+    st.markdown("### Charts")
     if filt.empty:
         st.info("No data after filters.")
     else:
-        # Choose grouping column for color
         possible_group = [c for c in ["geo", "tax", "currency", "nrg_cons", "customer", "siec", "unit", "nrg_prc"] if c in filt.columns]
         group_col = st.selectbox("Group / color by", possible_group, index=0 if possible_group else 0)
 
         chart_df = filt.copy()
         chart_df["time_period"] = chart_df["time_period"].astype(str)
 
-        # Eurostat-like styling (clean, subtle grid, line+points)
         base = (
             alt.Chart(chart_df)
             .encode(
@@ -607,7 +506,8 @@ else:
 
         st.altair_chart(
             line.configure_view(strokeWidth=0)
-                .configure_axis(grid=True, gridColor="#E6E6E6", domain=False, tickColor="#999999", labelColor="#444444", titleColor="#444444")
+                .configure_axis(grid=True, gridColor="#E6E6E6", domain=False, tickColor="#999999",
+                                labelColor="#444444", titleColor="#444444")
                 .configure_legend(titleColor="#444444", labelColor="#444444")
                 .configure_title(color="#222222"),
             use_container_width=True,
