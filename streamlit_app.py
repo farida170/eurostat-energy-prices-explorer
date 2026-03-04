@@ -23,47 +23,38 @@ YEAR_RE = re.compile(r"^\d{4}$")
 # -----------------------------
 def get_credentials():
     """
-    Preferred: Streamlit Secrets
+    Uses Streamlit Secrets:
       [auth]
       user = "admin"
       pass = "energytagorg"
-
-    Fallback (temporary): allows the app to work before secrets are configured.
-    Remove fallback after deployment if you want secrets-only.
     """
-    default_user = "admin"
-    default_pass = "energytagorg"
-
-    try:
-        auth = st.secrets.get("auth", {})
-        user = auth.get("user")
-        pwd = auth.get("pass")
-        if user and pwd:
-            return user, pwd, True  # secrets present
-    except Exception:
-        pass
-
-    return default_user, default_pass, False  # fallback
+    auth = st.secrets.get("auth", {})
+    return auth.get("user", ""), auth.get("pass", "")
 
 
 def login_screen():
-    # 2-step welcome -> login (mimics your example style)
+    """
+    Aesthetic welcome screen (like your reference):
+    1) Welcome (logo + WELCOME + one button)
+    2) Login card shown after clicking Login
+    """
     st.markdown(
         """
         <style>
+          /* Hide Streamlit chrome on login */
           header[data-testid="stHeader"] {display:none !important;}
           section[data-testid="stSidebar"] {display:none !important;}
           #MainMenu {visibility:hidden;}
           footer {visibility:hidden;}
 
+          /* Full-screen center */
           html, body, .stApp {height: 100%;}
           .block-container {padding-top: 0 !important; padding-bottom: 0 !important;}
-
           section.main > div {
             height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            display:flex;
+            align-items:center;
+            justify-content:center;
           }
 
           .et-wrap{
@@ -72,50 +63,54 @@ def login_screen():
             text-align: center;
           }
 
-          .et-logo {display:flex; justify-content:center; margin-bottom: 14px;}
+          .et-logo {display:flex; justify-content:center; margin-bottom: 16px;}
 
           .et-welcome{
-            font-size: 26px;
-            font-weight: 850;
-            letter-spacing: 0.08em;
-            margin: 10px 0 18px 0;
+            font-size: 28px;
+            font-weight: 900;
+            letter-spacing: 0.10em;
+            margin: 6px 0 6px 0;
           }
 
           .et-sub{
             font-size: 13px;
             opacity: 0.75;
-            margin-top: -10px;
-            margin-bottom: 20px;
+            margin: 0 0 18px 0;
           }
 
-          .et-btn button{
-            background: #ff4d4d !important;
-            border: 1px solid rgba(255,255,255,0.18) !important;
-            color: white !important;
+          /* Primary CTA button (like reference) */
+          .et-cta button{
+            background: #ff3b3b !important;
+            color: #fff !important;
+            border: none !important;
             border-radius: 14px !important;
             padding: 10px 18px !important;
-            font-weight: 700 !important;
+            font-weight: 800 !important;
+            box-shadow: 0 10px 25px rgba(255,59,59,0.22);
           }
 
           /* Login card */
           .et-card{
-            margin: 0 auto;
+            margin: 18px auto 0 auto;
             width: 420px;
             max-width: calc(100vw - 44px);
             background: rgba(255,255,255,0.055);
             border: 1px solid rgba(255,255,255,0.12);
             border-radius: 18px;
-            padding: 26px 24px 18px 24px;
+            padding: 22px 22px 18px 22px;
             box-shadow: 0 22px 70px rgba(0,0,0,0.55);
             backdrop-filter: blur(12px);
             text-align: left;
           }
+
           .et-card-title{
             font-size: 18px;
-            font-weight: 750;
-            margin: 2px 0 10px 0;
+            font-weight: 800;
+            margin: 0 0 10px 0;
           }
 
+          /* Tighter Streamlit widgets inside card */
+          div[data-testid="stForm"] {margin-top: 0.5rem;}
           .stTextInput > div > div input {border-radius: 12px;}
           .stButton button {border-radius: 12px; width: 100%;}
         </style>
@@ -123,9 +118,8 @@ def login_screen():
         unsafe_allow_html=True,
     )
 
-    user, pwd, secrets_ok = get_credentials()
+    valid_user, valid_pass = get_credentials()
 
-    # session state to control which step we show
     if "show_login_form" not in st.session_state:
         st.session_state["show_login_form"] = False
 
@@ -134,27 +128,25 @@ def login_screen():
     # Centered logo
     st.markdown('<div class="et-logo">', unsafe_allow_html=True)
     if LOGO_FILE.exists():
-        st.image(str(LOGO_FILE), width=280)
+        st.image(str(LOGO_FILE), width=290)
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # Step 1: Welcome screen
-    if not st.session_state["show_login_form"]:
-        st.markdown('<div class="et-welcome">WELCOME!</div>', unsafe_allow_html=True)
-        st.markdown('<div class="et-sub">Eurostat energy prices explorer</div>', unsafe_allow_html=True)
+    # Welcome headline
+    st.markdown('<div class="et-welcome">WELCOME!</div>', unsafe_allow_html=True)
+    st.markdown('<div class="et-sub">Eurostat energy prices explorer</div>', unsafe_allow_html=True)
 
-        st.markdown('<div class="et-btn">', unsafe_allow_html=True)
+    # CTA button
+    st.markdown('<div class="et-cta">', unsafe_allow_html=True)
+    if not st.session_state["show_login_form"]:
         if st.button("Login"):
             st.session_state["show_login_form"] = True
             st.rerun()
-        st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
-    # Step 2: Login form
-    else:
+    # Login card (only after clicking)
+    if st.session_state["show_login_form"]:
         st.markdown('<div class="et-card">', unsafe_allow_html=True)
         st.markdown('<div class="et-card-title">Sign in</div>', unsafe_allow_html=True)
-
-        if not secrets_ok:
-            st.info("Secrets not configured yet — using fallback login (admin / energytagorg).")
 
         with st.form("login_form", clear_on_submit=False):
             u = st.text_input("Username")
@@ -162,7 +154,7 @@ def login_screen():
             submitted = st.form_submit_button("Sign in")
 
         if submitted:
-            if u == user and p == pwd:
+            if u == valid_user and p == valid_pass:
                 st.session_state["authed"] = True
                 st.rerun()
             else:
@@ -315,9 +307,6 @@ def apply_friendly_headers(df: pd.DataFrame) -> pd.DataFrame:
     return out.rename(columns=new_cols)
 
 
-# -----------------------------
-# Full sheet titles (in order)
-# -----------------------------
 FULL_SHEET_TITLES = [
     "Gas prices for household consumers - bi-annual data",
     "Gas prices for non-household consumers - bi-annual data",
@@ -339,7 +328,7 @@ def build_sheet_title_maps(actual_sheets, full_titles):
     actual_set = set(actual_sheets)
     title_to_sheet = {}
     for t in full_titles:
-        key = t[:31]  # Excel tab limit
+        key = t[:31]
         if key in actual_set:
             title_to_sheet[t] = key
         else:
