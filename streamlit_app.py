@@ -34,8 +34,8 @@ def get_credentials():
 
 def login_screen():
     """
-    Aesthetic welcome screen (like your reference):
-    1) Welcome (logo + WELCOME + one button)
+    Aesthetic welcome screen (centered hero):
+    1) Welcome (big logo + WELCOME + one button)
     2) Login card shown after clicking Login
     """
     st.markdown(
@@ -57,45 +57,44 @@ def login_screen():
             justify-content:center;
           }
 
+          /* Center hero container */
           .et-wrap{
-            width: 520px;
-            max-width: calc(100vw - 44px);
+            width: 680px;
+            max-width: calc(100vw - 60px);
             text-align: center;
           }
 
-          .et-logo {display:flex; justify-content:center; margin-bottom: 16px;}
-
           .et-welcome{
-            font-size: 28px;
-            font-weight: 900;
-            letter-spacing: 0.10em;
-            margin: 6px 0 6px 0;
+            font-size: 44px;
+            font-weight: 950;
+            letter-spacing: 0.14em;
+            margin: 10px 0 10px 0;
           }
 
           .et-sub{
-            font-size: 13px;
-            opacity: 0.75;
-            margin: 0 0 18px 0;
+            font-size: 15px;
+            opacity: 0.80;
+            margin: 0 0 26px 0;
           }
 
-          /* Primary CTA button (like reference) */
+          /* Primary CTA */
           .et-cta button{
             background: #ff3b3b !important;
             color: #fff !important;
             border: none !important;
-            border-radius: 14px !important;
-            padding: 10px 18px !important;
-            font-weight: 800 !important;
-            box-shadow: 0 10px 25px rgba(255,59,59,0.22);
+            border-radius: 16px !important;
+            padding: 12px 22px !important;
+            font-weight: 900 !important;
+            box-shadow: 0 14px 30px rgba(255,59,59,0.25);
           }
 
           /* Login card */
           .et-card{
-            margin: 18px auto 0 auto;
-            width: 420px;
+            margin: 22px auto 0 auto;
+            width: 440px;
             max-width: calc(100vw - 44px);
-            background: rgba(255,255,255,0.055);
-            border: 1px solid rgba(255,255,255,0.12);
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.14);
             border-radius: 18px;
             padding: 22px 22px 18px 22px;
             box-shadow: 0 22px 70px rgba(0,0,0,0.55);
@@ -105,11 +104,11 @@ def login_screen():
 
           .et-card-title{
             font-size: 18px;
-            font-weight: 800;
+            font-weight: 850;
             margin: 0 0 10px 0;
           }
 
-          /* Tighter Streamlit widgets inside card */
+          /* Streamlit widget polish */
           div[data-testid="stForm"] {margin-top: 0.5rem;}
           .stTextInput > div > div input {border-radius: 12px;}
           .stButton button {border-radius: 12px; width: 100%;}
@@ -125,13 +124,10 @@ def login_screen():
 
     st.markdown('<div class="et-wrap">', unsafe_allow_html=True)
 
-    # Centered logo
-    st.markdown('<div class="et-logo">', unsafe_allow_html=True)
+    # Big centered logo
     if LOGO_FILE.exists():
-        st.image(str(LOGO_FILE), width=290)
-    st.markdown("</div>", unsafe_allow_html=True)
+        st.image(str(LOGO_FILE), width=420)
 
-    # Welcome headline
     st.markdown('<div class="et-welcome">WELCOME!</div>', unsafe_allow_html=True)
     st.markdown('<div class="et-sub">Eurostat energy prices explorer</div>', unsafe_allow_html=True)
 
@@ -554,8 +550,14 @@ else:
 
         st.altair_chart(
             line.configure_view(strokeWidth=0)
-                .configure_axis(grid=True, gridColor="#E6E6E6", domain=False, tickColor="#999999",
-                                labelColor="#444444", titleColor="#444444")
+                .configure_axis(
+                    grid=True,
+                    gridColor="#E6E6E6",
+                    domain=False,
+                    tickColor="#999999",
+                    labelColor="#444444",
+                    titleColor="#444444",
+                )
                 .configure_legend(titleColor="#444444", labelColor="#444444")
                 .configure_title(color="#222222"),
             use_container_width=True,
