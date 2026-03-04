@@ -34,9 +34,8 @@ def get_credentials():
 
 def login_screen():
     """
-    Full-screen centered welcome screen (guaranteed centered in Streamlit):
-    1) Welcome (big logo + WELCOME + one button)
-    2) Login card shown after clicking Login
+    Centered hero welcome + working button.
+    Uses Streamlit columns for centering (reliable).
     """
     st.markdown(
         """
@@ -47,42 +46,27 @@ def login_screen():
           #MainMenu {visibility:hidden;}
           footer {visibility:hidden;}
 
-          /* Remove Streamlit padding */
+          /* Remove padding + force vertical centering */
           .block-container {padding-top: 0 !important; padding-bottom: 0 !important;}
+          section.main > div {height: 100vh; display: flex; align-items: center; justify-content: center;}
 
-          /* Force a full-screen flex stage that we fully control */
-          .et-screen{
-            position: fixed;
-            inset: 0;
-            width: 100vw;
-            height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: transparent;
-            z-index: 9999;
-          }
-
-          .et-wrap{
-            width: 720px;
-            max-width: calc(100vw - 60px);
-            text-align: center;
-          }
-
+          /* Hero styles */
           .et-welcome{
             font-size: 46px;
             font-weight: 950;
             letter-spacing: 0.14em;
-            margin: 12px 0 10px 0;
+            margin: 14px 0 8px 0;
+            text-align: center;
           }
-
           .et-sub{
             font-size: 15px;
             opacity: 0.80;
-            margin: 0 0 26px 0;
+            margin: 0 0 22px 0;
+            text-align: center;
           }
 
-          .et-cta button{
+          /* Make the primary button look like a CTA */
+          div.et-cta > div.stButton > button {
             background: #ff3b3b !important;
             color: #fff !important;
             border: none !important;
@@ -92,20 +76,18 @@ def login_screen():
             box-shadow: 0 14px 30px rgba(255,59,59,0.25);
           }
 
-          /* Login card */
+          /* Card styling for the login form area */
           .et-card{
-            margin: 22px auto 0 auto;
             width: 460px;
             max-width: calc(100vw - 44px);
+            margin: 18px auto 0 auto;
             background: rgba(255,255,255,0.06);
             border: 1px solid rgba(255,255,255,0.14);
             border-radius: 18px;
             padding: 22px 22px 18px 22px;
             box-shadow: 0 22px 70px rgba(0,0,0,0.55);
             backdrop-filter: blur(12px);
-            text-align: left;
           }
-
           .et-card-title{
             font-size: 18px;
             font-weight: 850;
@@ -113,9 +95,8 @@ def login_screen():
           }
 
           /* Streamlit widget polish */
-          div[data-testid="stForm"] {margin-top: 0.5rem;}
           .stTextInput > div > div input {border-radius: 12px;}
-          .stButton button {border-radius: 12px; width: 100%;}
+          .stButton button {border-radius: 12px;}
         </style>
         """,
         unsafe_allow_html=True,
@@ -126,47 +107,46 @@ def login_screen():
     if "show_login_form" not in st.session_state:
         st.session_state["show_login_form"] = False
 
-    # Our own full-screen centered container
-    st.markdown('<div class="et-screen"><div class="et-wrap">', unsafe_allow_html=True)
+    # True horizontal centering using columns
+    left, mid, right = st.columns([1, 2, 1])
+    with mid:
+        # Logo centered
+        if LOGO_FILE.exists():
+            st.image(str(LOGO_FILE), width=420)
 
-    # Big centered logo
-    if LOGO_FILE.exists():
-        st.image(str(LOGO_FILE), width=420)
+        st.markdown('<div class="et-welcome">WELCOME!</div>', unsafe_allow_html=True)
+        st.markdown('<div class="et-sub">Eurostat energy prices explorer</div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="et-welcome">WELCOME!</div>', unsafe_allow_html=True)
-    st.markdown('<div class="et-sub">Eurostat energy prices explorer</div>', unsafe_allow_html=True)
-
-    st.markdown('<div class="et-cta">', unsafe_allow_html=True)
-    if not st.session_state["show_login_form"]:
-        if st.button("Login"):
-            st.session_state["show_login_form"] = True
-            st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    if st.session_state["show_login_form"]:
-        st.markdown('<div class="et-card">', unsafe_allow_html=True)
-        st.markdown('<div class="et-card-title">Sign in</div>', unsafe_allow_html=True)
-
-        with st.form("login_form", clear_on_submit=False):
-            u = st.text_input("Username")
-            p = st.text_input("Password", type="password")
-            submitted = st.form_submit_button("Sign in")
-
-        if submitted:
-            if u == valid_user and p == valid_pass:
-                st.session_state["authed"] = True
+        # CTA button (reliable click)
+        st.markdown('<div class="et-cta">', unsafe_allow_html=True)
+        if not st.session_state["show_login_form"]:
+            if st.button("Login", key="login_cta"):
+                st.session_state["show_login_form"] = True
                 st.rerun()
-            else:
-                st.error("Invalid username or password.")
-
-        if st.button("Back"):
-            st.session_state["show_login_form"] = False
-            st.rerun()
-
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # Close our full-screen container
-    st.markdown("</div></div>", unsafe_allow_html=True)
+        # Login form card
+        if st.session_state["show_login_form"]:
+            st.markdown('<div class="et-card">', unsafe_allow_html=True)
+            st.markdown('<div class="et-card-title">Sign in</div>', unsafe_allow_html=True)
+
+            with st.form("login_form", clear_on_submit=False):
+                u = st.text_input("Username")
+                p = st.text_input("Password", type="password")
+                submitted = st.form_submit_button("Sign in")
+
+            if submitted:
+                if u == valid_user and p == valid_pass:
+                    st.session_state["authed"] = True
+                    st.rerun()
+                else:
+                    st.error("Invalid username or password.")
+
+            if st.button("Back", key="login_back"):
+                st.session_state["show_login_form"] = False
+                st.rerun()
+
+            st.markdown("</div>", unsafe_allow_html=True)
 
 
 if "authed" not in st.session_state:
@@ -554,14 +534,8 @@ else:
 
         st.altair_chart(
             line.configure_view(strokeWidth=0)
-                .configure_axis(
-                    grid=True,
-                    gridColor="#E6E6E6",
-                    domain=False,
-                    tickColor="#999999",
-                    labelColor="#444444",
-                    titleColor="#444444",
-                )
+                .configure_axis(grid=True, gridColor="#E6E6E6", domain=False, tickColor="#999999",
+                                labelColor="#444444", titleColor="#444444")
                 .configure_legend(titleColor="#444444", labelColor="#444444")
                 .configure_title(color="#222222"),
             use_container_width=True,
