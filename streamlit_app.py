@@ -34,7 +34,7 @@ def get_credentials():
 
 def login_screen():
     """
-    Aesthetic welcome screen (centered hero):
+    Full-screen centered welcome screen (guaranteed centered in Streamlit):
     1) Welcome (big logo + WELCOME + one button)
     2) Login card shown after clicking Login
     """
@@ -47,28 +47,33 @@ def login_screen():
           #MainMenu {visibility:hidden;}
           footer {visibility:hidden;}
 
-          /* Full-screen center */
-          html, body, .stApp {height: 100%;}
+          /* Remove Streamlit padding */
           .block-container {padding-top: 0 !important; padding-bottom: 0 !important;}
-          section.main > div {
+
+          /* Force a full-screen flex stage that we fully control */
+          .et-screen{
+            position: fixed;
+            inset: 0;
+            width: 100vw;
             height: 100vh;
-            display:flex;
-            align-items:center;
-            justify-content:center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            z-index: 9999;
           }
 
-          /* Center hero container */
           .et-wrap{
-            width: 680px;
+            width: 720px;
             max-width: calc(100vw - 60px);
             text-align: center;
           }
 
           .et-welcome{
-            font-size: 44px;
+            font-size: 46px;
             font-weight: 950;
             letter-spacing: 0.14em;
-            margin: 10px 0 10px 0;
+            margin: 12px 0 10px 0;
           }
 
           .et-sub{
@@ -77,7 +82,6 @@ def login_screen():
             margin: 0 0 26px 0;
           }
 
-          /* Primary CTA */
           .et-cta button{
             background: #ff3b3b !important;
             color: #fff !important;
@@ -91,7 +95,7 @@ def login_screen():
           /* Login card */
           .et-card{
             margin: 22px auto 0 auto;
-            width: 440px;
+            width: 460px;
             max-width: calc(100vw - 44px);
             background: rgba(255,255,255,0.06);
             border: 1px solid rgba(255,255,255,0.14);
@@ -122,7 +126,8 @@ def login_screen():
     if "show_login_form" not in st.session_state:
         st.session_state["show_login_form"] = False
 
-    st.markdown('<div class="et-wrap">', unsafe_allow_html=True)
+    # Our own full-screen centered container
+    st.markdown('<div class="et-screen"><div class="et-wrap">', unsafe_allow_html=True)
 
     # Big centered logo
     if LOGO_FILE.exists():
@@ -131,7 +136,6 @@ def login_screen():
     st.markdown('<div class="et-welcome">WELCOME!</div>', unsafe_allow_html=True)
     st.markdown('<div class="et-sub">Eurostat energy prices explorer</div>', unsafe_allow_html=True)
 
-    # CTA button
     st.markdown('<div class="et-cta">', unsafe_allow_html=True)
     if not st.session_state["show_login_form"]:
         if st.button("Login"):
@@ -139,7 +143,6 @@ def login_screen():
             st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # Login card (only after clicking)
     if st.session_state["show_login_form"]:
         st.markdown('<div class="et-card">', unsafe_allow_html=True)
         st.markdown('<div class="et-card-title">Sign in</div>', unsafe_allow_html=True)
@@ -162,7 +165,8 @@ def login_screen():
 
         st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown("</div>", unsafe_allow_html=True)
+    # Close our full-screen container
+    st.markdown("</div></div>", unsafe_allow_html=True)
 
 
 if "authed" not in st.session_state:
