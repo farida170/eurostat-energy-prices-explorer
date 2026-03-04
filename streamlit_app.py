@@ -29,7 +29,7 @@ def get_credentials():
       pass = "energytagorg"
 
     Fallback (temporary): allows the app to work before secrets are configured.
-    Change or remove fallback after deployment.
+    Remove fallback after deployment if you want secrets-only.
     """
     default_user = "admin"
     default_pass = "energytagorg"
@@ -47,7 +47,7 @@ def get_credentials():
 
 
 def login_screen():
-    # Centered chic login card
+    # 2-step welcome -> login (mimics your example style)
     st.markdown(
         """
         <style>
@@ -66,19 +66,55 @@ def login_screen():
             justify-content: center;
           }
 
+          .et-wrap{
+            width: 520px;
+            max-width: calc(100vw - 44px);
+            text-align: center;
+          }
+
+          .et-logo {display:flex; justify-content:center; margin-bottom: 14px;}
+
+          .et-welcome{
+            font-size: 26px;
+            font-weight: 850;
+            letter-spacing: 0.08em;
+            margin: 10px 0 18px 0;
+          }
+
+          .et-sub{
+            font-size: 13px;
+            opacity: 0.75;
+            margin-top: -10px;
+            margin-bottom: 20px;
+          }
+
+          .et-btn button{
+            background: #ff4d4d !important;
+            border: 1px solid rgba(255,255,255,0.18) !important;
+            color: white !important;
+            border-radius: 14px !important;
+            padding: 10px 18px !important;
+            font-weight: 700 !important;
+          }
+
+          /* Login card */
           .et-card{
+            margin: 0 auto;
             width: 420px;
             max-width: calc(100vw - 44px);
             background: rgba(255,255,255,0.055);
             border: 1px solid rgba(255,255,255,0.12);
             border-radius: 18px;
-            padding: 28px 26px 22px 26px;
+            padding: 26px 24px 18px 24px;
             box-shadow: 0 22px 70px rgba(0,0,0,0.55);
             backdrop-filter: blur(12px);
+            text-align: left;
           }
-          .et-logo {display:flex; justify-content:center; margin-bottom: 14px;}
-          .et-title {text-align:center; font-size: 22px; font-weight: 750; margin: 6px 0 2px 0;}
-          .et-sub {text-align:center; font-size: 13px; opacity: 0.8; margin: 0 0 14px 0;}
+          .et-card-title{
+            font-size: 18px;
+            font-weight: 750;
+            margin: 2px 0 10px 0;
+          }
 
           .stTextInput > div > div input {border-radius: 12px;}
           .stButton button {border-radius: 12px; width: 100%;}
@@ -89,30 +125,54 @@ def login_screen():
 
     user, pwd, secrets_ok = get_credentials()
 
-    st.markdown('<div class="et-card">', unsafe_allow_html=True)
+    # session state to control which step we show
+    if "show_login_form" not in st.session_state:
+        st.session_state["show_login_form"] = False
 
+    st.markdown('<div class="et-wrap">', unsafe_allow_html=True)
+
+    # Centered logo
     st.markdown('<div class="et-logo">', unsafe_allow_html=True)
     if LOGO_FILE.exists():
-        st.image(str(LOGO_FILE), width=260)
+        st.image(str(LOGO_FILE), width=280)
     st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown('<div class="et-title">Welcome back</div>', unsafe_allow_html=True)
-    st.markdown('<div class="et-sub">Sign in to your account</div>', unsafe_allow_html=True)
+    # Step 1: Welcome screen
+    if not st.session_state["show_login_form"]:
+        st.markdown('<div class="et-welcome">WELCOME!</div>', unsafe_allow_html=True)
+        st.markdown('<div class="et-sub">Eurostat energy prices explorer</div>', unsafe_allow_html=True)
 
-    if not secrets_ok:
-        st.info("Secrets not configured yet — using temporary fallback login (admin / energytagorg).")
-
-    with st.form("login_form", clear_on_submit=False):
-        u = st.text_input("Username")
-        p = st.text_input("Password", type="password")
-        submitted = st.form_submit_button("Sign in")
-
-    if submitted:
-        if u == user and p == pwd:
-            st.session_state["authed"] = True
+        st.markdown('<div class="et-btn">', unsafe_allow_html=True)
+        if st.button("Login"):
+            st.session_state["show_login_form"] = True
             st.rerun()
-        else:
-            st.error("Invalid username or password.")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # Step 2: Login form
+    else:
+        st.markdown('<div class="et-card">', unsafe_allow_html=True)
+        st.markdown('<div class="et-card-title">Sign in</div>', unsafe_allow_html=True)
+
+        if not secrets_ok:
+            st.info("Secrets not configured yet — using fallback login (admin / energytagorg).")
+
+        with st.form("login_form", clear_on_submit=False):
+            u = st.text_input("Username")
+            p = st.text_input("Password", type="password")
+            submitted = st.form_submit_button("Sign in")
+
+        if submitted:
+            if u == user and p == pwd:
+                st.session_state["authed"] = True
+                st.rerun()
+            else:
+                st.error("Invalid username or password.")
+
+        if st.button("Back"):
+            st.session_state["show_login_form"] = False
+            st.rerun()
+
+        st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -383,6 +443,7 @@ dim_cols = [c for c in tidy.columns if c not in reserved and not c.endswith("_la
 def ss_init(key, default):
     if key not in st.session_state:
         st.session_state[key] = default
+
 
 ss_init("sel_time", [])
 ss_init("sel_geo", [])
