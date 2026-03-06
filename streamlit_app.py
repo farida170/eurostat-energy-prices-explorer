@@ -5,6 +5,9 @@ import pandas as pd
 import streamlit as st
 import altair as alt
 
+import plotly.express as px
+import pycountry
+
 # -----------------------------
 # Page config
 # -----------------------------
@@ -22,11 +25,10 @@ YEAR_RE = re.compile(r"^\d{4}$")
 # Auth
 # -----------------------------
 def get_credentials():
-    """
-    Uses Streamlit Secrets:
-      [auth]
-      user = "admin"
-      pass = "energytagorg"
+    """Uses Streamlit Secrets:
+    [auth]
+    user = "admin"
+    pass = "energytagorg"
     """
     auth = st.secrets.get("auth", {})
     return auth.get("user", ""), auth.get("pass", "")
@@ -35,22 +37,19 @@ def get_credentials():
 def login_screen():
     """
     Centered hero welcome + working button.
-    Uses Streamlit columns for centering (reliable).
+    Everything is centered (true middle).
     """
     st.markdown(
         """
         <style>
-          /* Hide Streamlit chrome on login */
           header[data-testid="stHeader"] {display:none !important;}
           section[data-testid="stSidebar"] {display:none !important;}
           #MainMenu {visibility:hidden;}
           footer {visibility:hidden;}
 
-          /* Remove padding + force vertical centering */
           .block-container {padding-top: 0 !important; padding-bottom: 0 !important;}
-          section.main > div {height: 100vh; display: flex; align-items: center; justify-content: center;}
+          section.main > div {height: 100vh; display:flex; align-items:center; justify-content:center;}
 
-          /* Hero styles */
           .et-welcome{
             font-size: 46px;
             font-weight: 950;
@@ -65,7 +64,7 @@ def login_screen():
             text-align: center;
           }
 
-          /* Make the primary button look like a CTA */
+          /* CTA button styling */
           div.et-cta > div.stButton > button {
             background: #ff3b3b !important;
             color: #fff !important;
@@ -76,7 +75,6 @@ def login_screen():
             box-shadow: 0 14px 30px rgba(255,59,59,0.25);
           }
 
-          /* Card styling for the login form area */
           .et-card{
             width: 460px;
             max-width: calc(100vw - 44px);
@@ -94,7 +92,6 @@ def login_screen():
             margin: 0 0 10px 0;
           }
 
-          /* Streamlit widget polish */
           .stTextInput > div > div input {border-radius: 12px;}
           .stButton button {border-radius: 12px;}
         </style>
@@ -107,25 +104,25 @@ def login_screen():
     if "show_login_form" not in st.session_state:
         st.session_state["show_login_form"] = False
 
-    # True horizontal centering using columns
-    left, mid, right = st.columns([1, 2, 1])
+    # Center horizontally using columns; content is in the middle column
+    left, mid, right = st.columns([1, 3, 1])
     with mid:
-        # Logo centered
         if LOGO_FILE.exists():
-            st.image(str(LOGO_FILE), width=420)
+            st.image(str(LOGO_FILE), width=520)
 
         st.markdown('<div class="et-welcome">WELCOME!</div>', unsafe_allow_html=True)
         st.markdown('<div class="et-sub">Eurostat energy prices explorer</div>', unsafe_allow_html=True)
 
-        # CTA button (reliable click)
-        st.markdown('<div class="et-cta">', unsafe_allow_html=True)
-        if not st.session_state["show_login_form"]:
-            if st.button("Login", key="login_cta"):
-                st.session_state["show_login_form"] = True
-                st.rerun()
-        st.markdown("</div>", unsafe_allow_html=True)
+        # Center the Login button itself
+        bL, bM, bR = st.columns([1, 1, 1])
+        with bM:
+            st.markdown('<div class="et-cta">', unsafe_allow_html=True)
+            if not st.session_state["show_login_form"]:
+                if st.button("Login", key="login_cta"):
+                    st.session_state["show_login_form"] = True
+                    st.rerun()
+            st.markdown("</div>", unsafe_allow_html=True)
 
-        # Login form card
         if st.session_state["show_login_form"]:
             st.markdown('<div class="et-card">', unsafe_allow_html=True)
             st.markdown('<div class="et-card-title">Sign in</div>', unsafe_allow_html=True)
@@ -308,7 +305,7 @@ def build_sheet_title_maps(actual_sheets, full_titles):
     actual_set = set(actual_sheets)
     title_to_sheet = {}
     for t in full_titles:
-        key = t[:31]
+        key = t[:31]  # Excel tab limit
         if key in actual_set:
             title_to_sheet[t] = key
         else:
@@ -316,6 +313,29 @@ def build_sheet_title_maps(actual_sheets, full_titles):
             if cand:
                 title_to_sheet[t] = cand[0]
     return title_to_sheet
+
+
+def iso3_from_geo(geo: str):
+    """Map Eurostat geo codes to ISO-3 for Plotly choropleth."""
+    if not geo or not isinstance(geo, str):
+        return None
+    g = geo.strip()
+
+    # Eurostat uses EL for Greece (ISO2 is GR)
+    if g == "EL":
+        g2 = "GR"
+    else:
+        g2 = g
+
+    # Only attempt for 2-letter country codes
+    if len(g2) == 2 and g2.isalpha():
+        try:
+            c = pycountry.countries.get(alpha_2=g2.upper())
+            return c.alpha_3 if c else None
+        except Exception:
+            return None
+
+    return None
 
 
 # -----------------------------
@@ -368,7 +388,7 @@ if st.sidebar.button("Logout"):
     st.rerun()
 
 # -----------------------------
-# Header
+# Header (removed subheading as requested)
 # -----------------------------
 st.markdown(
     """
@@ -382,7 +402,6 @@ st.markdown(
 h1, h2 = st.columns([6, 1], vertical_alignment="center")
 with h1:
     st.markdown("## Eurostat — Natural gas & electricity prices (2007 onwards)")
-    st.caption("Filter, chart, and export tables across datasets.")
 with h2:
     if LOGO_FILE.exists():
         st.image(str(LOGO_FILE), width=150)
@@ -395,6 +414,7 @@ st.markdown(f"# {display_title}")
 raw = load_sheet(str(DATA_FILE), sheet)
 tidy = tidy_from_wide(raw)
 
+# Add label columns using codebook if available
 if show_labels and codebook is not None:
     for c in list(tidy.columns):
         if c in ["time_period", "value", "flag"]:
@@ -402,9 +422,16 @@ if show_labels and codebook is not None:
         if c in label_map:
             tidy[f"{c}_label"] = tidy[c].map(label_map[c]).fillna("")
 
+# Build full country label for geo for display everywhere
+if "geo" in tidy.columns:
+    if "geo_label" in tidy.columns:
+        tidy["geo_full"] = tidy["geo_label"].where(tidy["geo_label"].astype(str).str.strip() != "", tidy["geo"])
+    else:
+        tidy["geo_full"] = tidy["geo"]
+
 times = sorted(tidy["time_period"].dropna().astype(str).unique().tolist(), key=time_sort_key)
 reserved = {"time_period", "value", "flag"}
-dim_cols = [c for c in tidy.columns if c not in reserved and not c.endswith("_label")]
+dim_cols = [c for c in tidy.columns if c not in reserved and not c.endswith("_label") and c != "geo_full"]
 
 # -----------------------------
 # Filters (default = ALL data)
@@ -435,15 +462,32 @@ with st.expander("Filters", expanded=True):
     c1, c2 = st.columns([2, 3], gap="large")
     with c1:
         time_sel = st.multiselect("Time period", times, default=st.session_state.get("sel_time", []), key="sel_time")
+
     with c2:
         geo_sel = []
         if "geo" in tidy.columns:
+            # show full country names in the selector
             geos = sorted(tidy["geo"].dropna().astype(str).unique().tolist())
-            geo_sel = st.multiselect("Country / region (geo)", geos, default=st.session_state.get("sel_geo", []), key="sel_geo")
+            geo_display = []
+            geo_disp_to_code = {}
+            for g in geos:
+                if "geo_full" in tidy.columns:
+                    name = tidy.loc[tidy["geo"].astype(str) == g, "geo_full"].dropna().astype(str).unique()
+                    name = name[0] if len(name) else g
+                else:
+                    name = g
+                disp = f"{name} ({g})" if name != g else g
+                geo_display.append(disp)
+                geo_disp_to_code[disp] = g
+
+            default_disp = [d for d, g in geo_disp_to_code.items() if g in st.session_state.get("sel_geo", [])]
+            chosen_disp = st.multiselect("Country / region", geo_display, default=default_disp, key="sel_geo_display")
+            geo_sel = [geo_disp_to_code[d] for d in chosen_disp] if chosen_disp else []
+
             if not geo_sel:
                 st.caption("All countries")
 
-    other_cols = [c for c in dim_cols if c != "geo"]
+    other_cols = [c for c in dim_cols if c not in {"geo"}]
     other_filters = {}
     if other_cols:
         grid = st.columns(3, gap="large")
@@ -460,8 +504,8 @@ with st.expander("Filters", expanded=True):
                         lab = lab[0] if len(lab) else ""
                         display.append(f"{v} — {lab}" if lab else v)
                     display_to_code = dict(zip(display, vals))
-                    chosen_disp = st.multiselect(ui_label, display, default=st.session_state.get(f"sel_{colname}", []), key=f"sel_{colname}")
-                    other_filters[colname] = [display_to_code[x] for x in chosen_disp] if chosen_disp else []
+                    chosen_disp2 = st.multiselect(ui_label, display, default=st.session_state.get(f"sel_{colname}", []), key=f"sel_{colname}")
+                    other_filters[colname] = [display_to_code[x] for x in chosen_disp2] if chosen_disp2 else []
                 else:
                     chosen = st.multiselect(ui_label, vals, default=st.session_state.get(f"sel_{colname}", []), key=f"sel_{colname}")
                     other_filters[colname] = chosen if chosen else []
@@ -497,46 +541,124 @@ st.download_button(
 display_df = apply_friendly_headers(filt)
 
 # -----------------------------
-# Table / Charts
+# Charts
 # -----------------------------
 if view_mode == "Table":
     st.markdown("### Results")
     st.dataframe(display_df, use_container_width=True, height=620)
+
 else:
     st.markdown("### Charts")
+
     if filt.empty:
         st.info("No data after filters.")
     else:
-        possible_group = [c for c in ["geo", "tax", "currency", "nrg_cons", "customer", "siec", "unit", "nrg_prc"] if c in filt.columns]
-        group_col = st.selectbox("Group / color by", possible_group, index=0 if possible_group else 0)
+        chart_type = st.radio("Chart type", ["Line", "Bar (by country)", "Map (Europe)"], horizontal=True)
 
-        chart_df = filt.copy()
-        chart_df["time_period"] = chart_df["time_period"].astype(str)
+        # Use full names when available
+        if "geo_full" in filt.columns:
+            geo_name_col = "geo_full"
+        else:
+            geo_name_col = "geo" if "geo" in filt.columns else None
 
-        base = (
-            alt.Chart(chart_df)
-            .encode(
-                x=alt.X("time_period:N", sort=times, title="Time period"),
-                y=alt.Y("value:Q", title="Value"),
-                tooltip=[
-                    alt.Tooltip("time_period:N", title="Time"),
-                    alt.Tooltip("value:Q", title="Value"),
-                    alt.Tooltip("flag:N", title="Flag"),
-                    alt.Tooltip(f"{group_col}:N", title=FRIENDLY_COLS.get(group_col, group_col)),
-                ],
-            )
-            .properties(height=420)
-        )
+        # ---- LINE (existing, Eurostat-style) ----
+        if chart_type == "Line":
+            possible_group = [c for c in ["geo_full", "geo", "tax", "currency", "nrg_cons", "customer", "siec", "unit", "nrg_prc"] if c in filt.columns]
+            if not possible_group:
+                st.info("No grouping columns available for line chart.")
+            else:
+                group_col = st.selectbox("Group / color by", possible_group, index=0)
 
-        line = base.mark_line(point=True).encode(
-            color=alt.Color(f"{group_col}:N", title=FRIENDLY_COLS.get(group_col, group_col))
-        )
+                chart_df = filt.copy()
+                chart_df["time_period"] = chart_df["time_period"].astype(str)
 
-        st.altair_chart(
-            line.configure_view(strokeWidth=0)
-                .configure_axis(grid=True, gridColor="#E6E6E6", domain=False, tickColor="#999999",
-                                labelColor="#444444", titleColor="#444444")
-                .configure_legend(titleColor="#444444", labelColor="#444444")
-                .configure_title(color="#222222"),
-            use_container_width=True,
-        )
+                base = (
+                    alt.Chart(chart_df)
+                    .encode(
+                        x=alt.X("time_period:N", sort=times, title="Time period"),
+                        y=alt.Y("value:Q", title="Value"),
+                        tooltip=[
+                            alt.Tooltip("time_period:N", title="Time"),
+                            alt.Tooltip("value:Q", title="Value"),
+                            alt.Tooltip("flag:N", title="Flag"),
+                            alt.Tooltip(f"{group_col}:N", title=FRIENDLY_COLS.get(group_col, group_col)),
+                        ],
+                    )
+                    .properties(height=420)
+                )
+
+                line = base.mark_line(point=True).encode(
+                    color=alt.Color(f"{group_col}:N", title=FRIENDLY_COLS.get(group_col, group_col))
+                )
+
+                st.altair_chart(
+                    line.configure_view(strokeWidth=0)
+                        .configure_axis(grid=True, gridColor="#E6E6E6", domain=False, tickColor="#999999",
+                                        labelColor="#444444", titleColor="#444444")
+                        .configure_legend(titleColor="#444444", labelColor="#444444")
+                        .configure_title(color="#222222"),
+                    use_container_width=True,
+                )
+
+        # ---- BAR (Eurostat-like ranking by country for selected time) ----
+        elif chart_type == "Bar (by country)":
+            if geo_name_col is None:
+                st.info("No geo column found for a country bar chart.")
+            else:
+                t_pick = st.selectbox("Time period", sorted(filt["time_period"].dropna().astype(str).unique().tolist(), key=time_sort_key),
+                                      index=len(sorted(filt["time_period"].dropna().astype(str).unique().tolist(), key=time_sort_key)) - 1)
+                df_t = filt[filt["time_period"].astype(str) == str(t_pick)].copy()
+                df_t = df_t.dropna(subset=["value"])
+                # keep only countries (2-letter or EL) for a clean ranking, but allow others if you want
+                df_t["geo_label_show"] = df_t[geo_name_col].astype(str)
+
+                # aggregate if multiple rows per country (e.g., other dims): mean
+                bar = df_t.groupby("geo_label_show", as_index=False)["value"].mean()
+                bar = bar.sort_values("value", ascending=False).head(40)
+
+                fig = px.bar(
+                    bar,
+                    x="value",
+                    y="geo_label_show",
+                    orientation="h",
+                    title=f"Country comparison — {t_pick}",
+                    labels={"value": "Value", "geo_label_show": "Country"},
+                )
+                fig.update_layout(height=800, margin=dict(l=10, r=10, t=50, b=10))
+                st.plotly_chart(fig, use_container_width=True)
+
+        # ---- MAP (Eurostat-like choropleth for Europe for selected time) ----
+        else:
+            if "geo" not in filt.columns:
+                st.info("No geo column found for the map.")
+            else:
+                t_pick = st.selectbox("Time period", sorted(filt["time_period"].dropna().astype(str).unique().tolist(), key=time_sort_key),
+                                      index=len(sorted(filt["time_period"].dropna().astype(str).unique().tolist(), key=time_sort_key)) - 1)
+                df_t = filt[filt["time_period"].astype(str) == str(t_pick)].copy()
+                df_t = df_t.dropna(subset=["value"])
+
+                # Keep only mappable country codes
+                df_t["iso3"] = df_t["geo"].astype(str).apply(iso3_from_geo)
+                df_map = df_t.dropna(subset=["iso3"]).copy()
+
+                # Collapse duplicates (if multiple rows per country) -> mean
+                if "geo_full" in df_map.columns:
+                    df_map["name"] = df_map["geo_full"]
+                else:
+                    df_map["name"] = df_map["geo"]
+                df_map = df_map.groupby(["iso3", "name"], as_index=False)["value"].mean()
+
+                if df_map.empty:
+                    st.info("No mappable country rows found (only aggregates like EU27 may be present).")
+                else:
+                    fig = px.choropleth(
+                        df_map,
+                        locations="iso3",
+                        color="value",
+                        hover_name="name",
+                        scope="europe",
+                        title=f"Europe map — {t_pick}",
+                        color_continuous_scale="YlOrBr",
+                    )
+                    fig.update_layout(margin=dict(l=10, r=10, t=50, b=10), height=650)
+                    st.plotly_chart(fig, use_container_width=True)
